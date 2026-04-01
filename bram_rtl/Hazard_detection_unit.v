@@ -1,0 +1,56 @@
+`include "defines.v"
+module Hazard_detection_unit(
+    input wire [31:0] id_inst_i,
+    input wire [31:0] ex_inst_i,
+    //input  wire [31:0] mem1_inst_i,
+    output reg hold_flag_o,
+    output reg flush_flag_o
+);
+
+wire [6:0]id_opcode;
+wire [6:0]ex_opcode;
+
+//wire [6:0] mem1_opcode = mem1_inst_i[6:0];
+//wire [4:0] mem1_rd     = mem1_inst_i[11:7];
+wire [4:0]id_rs1;
+wire [4:0]id_rs2;
+wire [4:0]ex_rd;
+
+assign id_opcode = id_inst_i[6:0];
+assign ex_opcode = ex_inst_i[6:0];
+assign id_rs1 = id_inst_i[19:15];
+assign id_rs2 = id_inst_i[24:20];
+assign ex_rd = ex_inst_i[11:7];
+
+// 🚨 终极补丁：精准判定 ID 级指令是否真的使用了对应的源寄存器
+wire id_use_rs1 = (id_opcode == `INST_TYPE_R_M) || (id_opcode == `INST_TYPE_I) || 
+                  (id_opcode == `INST_TYPE_S)   || (id_opcode == `INST_TYPE_B) || 
+                  (id_opcode == `INST_TYPE_L)   || (id_opcode == `INST_JALR);
+
+wire id_use_rs2 = (id_opcode == `INST_TYPE_R_M) || (id_opcode == `INST_TYPE_S) || 
+                  (id_opcode == `INST_TYPE_B);
+
+always@(*)begin
+    hold_flag_o = 1'b0;
+    flush_flag_o = 1'b0;
+    
+    // 加入 use_rs1 和 use_rs2 掩码，彻底封杀假冒险！
+    if(ex_opcode == `INST_TYPE_L && ex_rd != 5'b0) begin
+        if(id_use_rs1 && ex_rd == id_rs1) begin
+            hold_flag_o = 1'b1;
+            flush_flag_o = 1'b1;
+        end
+        if(id_use_rs2 && ex_rd == id_rs2) begin
+            hold_flag_o = 1'b1;
+            flush_flag_o = 1'b1;
+        end
+    end
+   // if(mem1_opcode == `INST_TYPE_L && mem1_rd != 5'b0) begin
+   //         if((id_use_rs1 && mem1_rd == id_rs1) || (id_use_rs2 && mem1_rd == id_rs2)) begin
+   //             hold_flag_o = 1'b1;
+   //             flush_flag_o = 1'b1;
+   //         end
+   //     end
+end
+
+endmodule
